@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>local.boywithalo.claudepill</string>
+	<key>CFBundleName</key>
+	<string>ClaudePill</string>
+	<key>CFBundleDisplayName</key>
+	<string>Claude Pill</string>
+	<key>CFBundleExecutable</key>
+	<string>ClaudePill</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Claude Pill selects the terminal tab of a Claude Code session when you click its pill, and shows and controls what Spotify or Music is playing.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Claude Pill listens to Spotify or Music so the cover art can bounce along with the beat. Nothing is recorded or saved.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
