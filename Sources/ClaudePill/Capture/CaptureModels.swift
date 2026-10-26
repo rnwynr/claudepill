@@ -24,6 +24,15 @@ enum CaptureAction: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// "copy", for the one-line hint in the island.
+    var verb: String {
+        switch self {
+        case .screenshotToClipboard: "copy"
+        case .screenshotToFile: "save"
+        case .record: "record"
+        }
+    }
+
     var symbol: String {
         switch self {
         case .screenshotToClipboard: "doc.on.clipboard"
@@ -103,7 +112,7 @@ struct CaptureTarget {
         guard let display = content.displays.first(where: { $0.displayID == selection.displayID }) else {
             throw CaptureError.displayUnavailable
         }
-        // Hide every window Snappabl owns (overlay, HUD, recording controls).
+        // Hide every window the app owns: the pills and island, the overlay, recording controls.
         let pid = ProcessInfo.processInfo.processIdentifier
         let ownApps = content.applications.filter { $0.processID == pid }
         let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
@@ -122,7 +131,7 @@ enum FileNaming {
         return f
     }()
 
-    /// "Snappabl 2026-10-26 at 14.03.22.png", with " (2)" etc. on collision.
+    /// "Screenshot 2026-10-26 at 14.03.22.png", with " (2)" etc. on collision.
     static func nextURL(in folder: URL, prefix: String, ext: String) throws -> URL {
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)

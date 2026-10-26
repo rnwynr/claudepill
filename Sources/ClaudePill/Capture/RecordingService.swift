@@ -16,7 +16,7 @@ final class RecordingService {
     @ObservationIgnored private var outputURL: URL?
 
     private let callbacks = StreamCallbacks()
-    private let sampleQueue = DispatchQueue(label: "app.snappabl.samples", qos: .utility)
+    private let sampleQueue = DispatchQueue(label: "local.boywithalo.claudepill.capture", qos: .utility)
 
     init() {
         callbacks.onFinished = { [weak self] in
@@ -27,7 +27,7 @@ final class RecordingService {
         }
     }
 
-    func start(_ selection: CaptureSelection, prefs: Preferences) async throws {
+    func start(_ selection: CaptureSelection, prefs: CapturePreferences) async throws {
         guard stream == nil, !isStarting else { return }
         isStarting = true
         defer { isStarting = false }
@@ -54,7 +54,7 @@ final class RecordingService {
         let codec: AVVideoCodecType = prefs.codec == .hevc ? .hevc : .h264
         recording.outputFileType = fileType
         recording.videoCodecType = recording.availableVideoCodecTypes.contains(codec) ? codec : .h264
-        let url = try FileNaming.nextURL(in: prefs.saveFolder, prefix: "Snappabl Recording",
+        let url = try FileNaming.nextURL(in: prefs.saveFolder, prefix: "Recording",
                                          ext: fileType == .mp4 ? "mp4" : "mov")
         recording.outputURL = url
 

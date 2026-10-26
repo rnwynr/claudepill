@@ -4,7 +4,7 @@ import SwiftUI
 /// Click, then press a combo. Esc cancels, ⌫ clears.
 struct ShortcutRecorder: View {
     let action: CaptureAction
-    @Environment(AppController.self) private var app
+    @Environment(CaptureController.self) private var app
     @State private var isRecording = false
     @State private var monitor: Any?
 

@@ -2,14 +2,14 @@ import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 
-/// Lets clicks land on our panels even while Snappabl isn't the active app.
+/// Lets clicks land on our panels even while Claude Pill isn't the active app.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Transparent, non-activating panel that floats above everything and follows you across Spaces.
 /// Used for the HUD, the recording pill and the region outline.
-final class FloatingPanel: NSPanel {
+final class CapturePanel: NSPanel {
     init(size: CGSize) {
         super.init(contentRect: CGRect(origin: .zero, size: size),
                    styleMask: [.borderless, .nonactivatingPanel],
@@ -27,10 +27,10 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    static func hosting<V: View>(_ view: V) -> (FloatingPanel, FirstMouseHostingView<V>) {
+    static func hosting<V: View>(_ view: V) -> (CapturePanel, FirstMouseHostingView<V>) {
         let host = FirstMouseHostingView(rootView: view)
         host.safeAreaRegions = []
-        let panel = FloatingPanel(size: host.fittingSize)
+        let panel = CapturePanel(size: host.fittingSize)
         panel.contentView = host
         return (panel, host)
     }
@@ -66,7 +66,7 @@ final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     /// Installs the content view plus an always-active tracking area, so hover works
-    /// even though Snappabl stays in the background while you select.
+    /// even though the app stays in the background while you select.
     func setContent(_ view: NSView) {
         contentView = view
         tracker.onMove = { [weak self] in self?.onMouseMoved?() }

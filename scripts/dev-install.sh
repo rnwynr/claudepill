@@ -9,6 +9,8 @@ rm -rf "$A"
 cp -R "build/Claude Pill.app" "$A"
 if [ "$1" = "--dock" ]; then
   /usr/libexec/PlistBuddy -c "Set :LSUIElement false" "$A/Contents/Info.plist"
-  codesign --force --sign - "$A" >/dev/null 2>&1
+  # Re-sign with the same identity the build used, so permissions keep matching.
+  ID="$(codesign -dvv "$A" 2>&1 | awk -F= '/^Authority=/ { print $2; exit }')"
+  codesign --force --sign "${ID:--}" "$A" >/dev/null 2>&1
 fi
 open "$A"

@@ -2,7 +2,9 @@
 
 A floating Liquid Glass status pill for Claude Code and Codex. Drag it anywhere; it shows every
 active session (desktop app or terminal) and what each one is doing right now. Claude sessions
-use Claude's orange, Codex sessions use Codex blue.
+use Claude's orange, Codex sessions use Codex blue. It also takes screenshots and screen
+recordings (this used to be a separate app, Snappabl), and everything that happens shows up in
+one place: the island above the pills.
 
 <p align="center"><img src="docs/screenshots/pills.png" width="370" alt="A stack of pills in every state: working, needs permission, question with options, compacting, done, error and interrupted"></p>
 
@@ -76,6 +78,7 @@ The hook is a few lines of `sh` + `jq`, always exits 0, and never blocks Claude.
 ./scripts/install.sh      # build if needed, install to /Applications, add hooks to ~/.claude/settings.json
 ./scripts/uninstall.sh    # remove hooks, app, and ~/.claude/pill
 ./scripts/dev-install.sh  # reinstall + restart after a rebuild (--dock to run as a Dock app)
+./scripts/make-signing-cert.sh  # once: a local signing identity so permissions survive rebuilds
 ```
 
 `install.sh` backs up your settings to `~/.claude/settings.json.before-claudepill` and is safe
@@ -91,13 +94,62 @@ Click the small handle above the pills to see how much of the 5-hour and weekly 
 - **Codex** limits come from `codex app-server` (bundled in the desktop app). Saved accounts share Codex Account Menu's store (Keychain service `local.codex-account-menu.account` and `~/Library/Application Support/CodexAccountMenu/accounts.plist`).
 - Click an account to switch: Codex quits, the live login is saved back to its slot, the chosen login is written to `~/.codex/auth.json`, and Codex reopens. **Add account** runs `codex login`; the × on an account removes it.
 
-The handle doubles as a little island: when a 5hr or weekly limit drops to 15%, 5% or 0% left, or a window resets, it widens for a few seconds with a notice like `Codex · work · 5hr · 12% left`. Each warning shows once per window.
+## The island
+
+The handle above the pills doubles as a little Dynamic Island. Whenever something happens it widens for a few seconds with a one-line notice, one at a time, oldest first:
+
+| Notice | Looks like | Click does |
+| --- | --- | --- |
+| Usage limit at 15%, 5% or 0% left, or a window reset | `Codex · work · 5hr · 12% left` (once per window) | opens the usage panel |
+| Limit running out within the hour | `Claude · 5hr · runs out in ~40min` | opens the usage panel |
+| Daily recap, from 9 pm | `Today · 14 turns · 3hr 40min of agent time` | opens the usage panel |
+| Screenshot copied | thumbnail · `Screenshot · Copied · 3024 × 1964` | — |
+| Screenshot saved | thumbnail · `Screenshot · Saved · Screenshot 2026-10-26 at 14.03.22.png` | shows the file in Finder |
+| Recording saved | `Recording · Saved · Recording 2026-10-26 at 14.05.10.mp4` | shows the file in Finder |
+| Capture failed / permission missing | red or orange notice | opens Privacy & Security when that's the fix |
+| Codex account switch failed | `Codex accounts · …` (when the panel is closed) | opens the usage panel |
+| New song while the player is tucked into the disc | `Now playing · Title — Artist` | opens the usage panel |
+
+While a screen recording runs, the island shows `● Recording 0:42` with a stop button. It's the app's own window, so it never appears in the video.
+
+If you turn the floating pill off (**Show Floating Pill** in the menu), notices fall back to a small toast in the bottom-right corner, and the recording gets its own floating timer.
+
+Anything new in the app posts through `Island.shared.post(IslandNotice(...))`, so new features land in the same place.
 
 **Pace.** When a window is being used fast enough to run out before it resets, the panel says when ("runs out in ~1hr 20min") and the island warns once if that's within the hour. The 5hr window uses your recent pace; the weekly one uses the average since the week began.
 
 **Today.** The panel sums up the day: turns, agent time per agent, sessions and the busiest one. At 9 pm the island shows the day's recap once.
 
 **Task progress.** When Claude (TodoWrite or TaskCreate/TaskUpdate) or Codex (update_plan) keeps a task list, a working pill shows "Step 3 of 5" and a hairline progress bar along its bottom edge; hover it to see the whole checklist.
+
+## Screenshots and recordings
+
+| Shortcut | Action |
+| --- | --- |
+| **⌥⇧1** | Screenshot → **clipboard** |
+| **⌥⇧2** | Screenshot → **folder** (`~/Pictures/Claude Pill` by default) |
+| **⌥⇧3** | Start / stop **screen recording** |
+
+The same three actions are in the menu bar menu, along with **Open Captures Folder** and **Capture Settings…**, where you change the shortcuts (click, then press the new combo; Esc cancels, ⌫ clears), the folder, sound, cursor, frame rate, codec and audio. The menu bar asterisk turns into a red record dot while recording.
+
+After you press a shortcut, drag to select an area or click to capture the whole screen under the cursor. Esc or a right-click cancels.
+
+| While selecting | Does |
+| --- | --- |
+| **⇧ Shift** | Locks the selection to a square |
+| **⌥ Option** | Grows the selection from its center |
+| **⌘ Command** | Window mode: hover highlights a window, click captures just that window with transparent rounded corners. Works for recordings too, and the recording follows the window. |
+| **Space** (while dragging) | Moves the selection instead of resizing it |
+
+A region recording gets a dashed red outline, which stays out of the video. Captures leave out every window the app owns, so the pills, the island and the overlay never show up in your screenshots.
+
+- **Full native resolution**, lossless PNG tagged Display P3, with the Retina DPI set so it doesn't open at double size.
+- **Recordings** go straight from ScreenCaptureKit to the Media Engine's HEVC (or H.264) encoder, up to 60 fps, with optional system audio and microphone. The app never touches a pixel.
+- **Idle cost is zero:** hotkeys use Carbon `RegisterEventHotKey` (no key monitor, no Accessibility permission), and nothing runs between captures.
+
+**Coming from Snappabl?** Your shortcuts and capture settings are imported on first launch, and `install.sh` quits and removes `Snappabl.app` so the two don't fight over the same shortcuts.
+
+**Permissions.** macOS asks for Screen Recording on the first capture; allow it in System Settings → Privacy & Security → Screen & System Audio Recording, then reopen the app. The microphone is asked for only when you turn it on. macOS ties these permissions to the app's signature, and ad-hoc signatures change on every build, so `build.sh` signs with a stable identity when it finds one: an Apple Development certificate (free via Xcode → Settings → Accounts) or the self-signed one `scripts/make-signing-cert.sh` creates. If the prompt keeps coming back, run `tccutil reset ScreenCapture local.boywithalo.claudepill`, rebuild, and allow it once more.
 
 ## Now playing
 

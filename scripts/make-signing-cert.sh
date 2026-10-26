@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Creates a self-signed code-signing certificate in your login keychain, so every build of
-# Snappabl carries the same signature and macOS keeps its Screen Recording permission.
+# Claude Pill carries the same signature and macOS keeps its Screen Recording permission.
 # Only needed if you don't have an "Apple Development" certificate from Xcode.
 set -euo pipefail
 
-NAME="Snappabl Local Signing"
+NAME="Claude Pill Local Signing"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 
 if security find-identity -p codesigning 2>/dev/null | grep -q "\"$NAME\""; then
@@ -32,8 +32,8 @@ EOF
 /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config "$TMP/cert.conf" \
   -keyout "$TMP/key.pem" -out "$TMP/cert.pem" 2>/dev/null
 /usr/bin/openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -name "$NAME" \
-  -out "$TMP/id.p12" -passout pass:snappabl
-security import "$TMP/id.p12" -k "$KEYCHAIN" -P snappabl -T /usr/bin/codesign >/dev/null
+  -out "$TMP/id.p12" -passout pass:claudepill
+security import "$TMP/id.p12" -k "$KEYCHAIN" -P claudepill -T /usr/bin/codesign >/dev/null
 
 echo "✓ Created \"$NAME\" in your login keychain."
 echo "  If codesign asks to use the key, click \"Always Allow\"."

@@ -5,11 +5,24 @@ import SwiftUI
 @main
 struct ClaudePillApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @State private var capture = CaptureController.shared
 
     var body: some Scene {
-        MenuBarExtra("Claude Pill", systemImage: "asterisk") {
+        MenuBarExtra {
             MenuContent()
+        } label: {
+            Image(systemName: capture.recorder.isRecording ? "record.circle.fill" : "asterisk")
         }
+
+        Window("Capture Settings", id: CaptureSettingsView.windowID) {
+            CaptureSettingsView()
+                .environment(capture)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .windowBackgroundDragBehavior(.enabled)
+        .defaultLaunchBehavior(.suppressed)
+        .defaultPosition(.center)
     }
 }
 
@@ -29,6 +42,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UsageStore.shared.start()
         NowPlayingStore.shared.start()
         PanelController.shared.show()
+        CaptureController.shared.start()
+    }
+
+    /// Let an in-progress recording finalize its file before quitting.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let recorder = CaptureController.shared.recorder
+        guard recorder.isRecording else { return .terminateNow }
+        Task {
+            await recorder.stop()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }
 
@@ -40,6 +65,8 @@ struct MenuContent: View {
     @ObservedObject private var music = NowPlayingStore.shared
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage("pill.liquidMerge") private var liquidMerge = false
+    @Environment(\.openWindow) private var openWindow
+    private let capture = CaptureController.shared
 
     var body: some View {
         if !store.hooksInstalled {
@@ -52,6 +79,8 @@ struct MenuContent: View {
         Toggle("Show What Spotify or Music Is Playing", isOn: $music.enabled)
         Toggle("Play a Sound When Claude Finishes", isOn: $store.soundOnFinish)
         Toggle("Melt Neighbouring Pills Together", isOn: $liquidMerge)
+        Divider()
+        captureSection
         Divider()
         Button("Clear Finished Sessions") { store.clearFinished() }
         Button("Move Pill Back to Top Right") { panel.resetPosition() }
@@ -67,6 +96,30 @@ struct MenuContent: View {
         Divider()
         Button("Quit Claude Pill") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+
+    @ViewBuilder
+    private var captureSection: some View {
+        ForEach(CaptureAction.allCases) { action in
+            let live = action == .record && capture.recorder.isRecording
+            let shortcut = capture.prefs.shortcuts[action].map { "   \($0.displayString)" } ?? ""
+            let taken = capture.hotkeyConflicts.contains(action) ? " (shortcut taken)" : ""
+            Button {
+                // Let the menu close before the selection overlay covers the screen.
+                Task {
+                    if !live { try? await Task.sleep(for: .milliseconds(180)) }
+                    capture.perform(action)
+                }
+            } label: {
+                Label((live ? "Stop Recording" : action.title) + shortcut + taken,
+                      systemImage: live ? "stop.fill" : action.symbol)
+            }
+        }
+        Button("Open Captures Folder") { capture.openSaveFolder() }
+        Button("Capture Settings…") {
+            openWindow(id: CaptureSettingsView.windowID)
+            NSApp.activate()
+        }
     }
 }
 
@@ -203,6 +256,13 @@ final class PanelController: ObservableObject {
         observers.append(SessionStore.shared.$hideWhenIdle.sink { [weak self] _ in
             DispatchQueue.main.async { self?.updateVisibility() }
         })
+        // Notices and a running recording bring the island back even when nothing else shows.
+        observers.append(Island.shared.$notices.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateVisibility() }
+        })
+        observers.append(Island.shared.$recordingSince.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateVisibility() }
+        })
 
         // Let the mouse through the window's empty area and track hover. Checked 30 times a
         // second because an ignoring window gets no events to tell it the pointer came back.
@@ -246,7 +306,9 @@ final class PanelController: ObservableObject {
 
     func updateVisibility() {
         let store = SessionStore.shared
+        let island = Island.shared
         let idle = store.visible.isEmpty && NowPlayingStore.shared.current == nil
+            && island.notices.isEmpty && island.recordingSince == nil
         let wanted = isShown && !(store.hideWhenIdle && idle)
         if wanted, !panel.isVisible { panel.orderFrontRegardless() }
         if !wanted, panel.isVisible { panel.orderOut(nil) }

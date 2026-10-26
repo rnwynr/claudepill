@@ -2,17 +2,21 @@ import AppKit
 import SwiftUI
 
 /// The grabber above the pills, working like a small Dynamic Island: a short bar most of
-/// the time, widening into a one-line notice when a usage limit runs low or resets.
-/// Clicking it opens the usage panel.
+/// the time, widening into a one-line notice when something happens (a usage limit runs low
+/// or resets, a screenshot is taken, a recording is saved…) and into a live timer while
+/// the screen is being recorded. Clicking it opens the usage panel.
 struct UsageHandle: View {
     let open: Bool
-    @ObservedObject var usage = UsageStore.shared
+    @ObservedObject var island = Island.shared
 
     var body: some View {
         Group {
-            if let alert = usage.alerts.first, !open {
-                AlertIsland(alert: alert)
-                    .id(alert.id)
+            if let notice = island.notices.first, !open {
+                NoticeIsland(notice: notice)
+                    .id(notice.id)
+                    .transition(.blurReplace)
+            } else if let since = island.recordingSince, !open {
+                RecordingIsland(since: since)
                     .transition(.blurReplace)
             } else {
                 Capsule()
@@ -26,55 +30,88 @@ struct UsageHandle: View {
         .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
         .contentShape(Rectangle().inset(by: -6))
         .onTapGesture {
-            if !usage.alerts.isEmpty { usage.dismissAlert() }
+            // A notice with its own action (reveal the file, open settings) does that instead.
+            if island.click() { return }
             PanelController.shared.toggleUsage()
         }
-        .animation(.spring(duration: 0.5, bounce: 0.3), value: usage.alerts.first?.id)
-        .help(open ? "Hide usage limits" : "Show usage limits")
+        .animation(.spring(duration: 0.5, bounce: 0.3), value: island.notices.first?.id)
+        .animation(.spring(duration: 0.5, bounce: 0.3), value: island.recordingSince)
+        .help(help)
+    }
+
+    private var help: String {
+        if !open, let notice = island.notices.first, notice.onClick != nil { return "\(notice.name) · \(notice.text)" }
+        return open ? "Hide usage limits" : "Show usage limits"
     }
 
     private var tint: Color {
-        guard !open, let alert = usage.alerts.first else { return .pillBase }
-        switch alert.level {
-        case .low: return Color.orange.opacity(0.16)
-        case .critical: return Color.red.opacity(0.18)
-        case .reset: return Color.green.opacity(0.14)
-        case .info: return .pillBase
-        }
+        guard !open else { return .pillBase }
+        if let notice = island.notices.first { return notice.tint }
+        if island.recordingSince != nil { return Color.red.opacity(0.16) }
+        return .pillBase
     }
 }
 
-/// "[logo] Codex · work · 5h · 12% left"
-private struct AlertIsland: View {
-    let alert: UsageAlert
+/// "[logo] Codex · work · 5h · 12% left", or "[thumbnail] Screenshot · Copied · 3024 × 1964"
+private struct NoticeIsland: View {
+    let notice: IslandNotice
 
     var body: some View {
         HStack(spacing: 6) {
-            if let agent = alert.agent, let icon = agent == .codex ? AppIcon.codex : AppIcon.claude {
+            if let thumbnail = notice.thumbnail {
+                Image(nsImage: thumbnail).resizable().aspectRatio(contentMode: .fill)
+                    .frame(width: 28, height: 19)
+                    .clipShape(.rect(cornerRadius: 4))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+            } else if let agent = notice.agent, let icon = agent == .codex ? AppIcon.codex : AppIcon.claude {
                 Image(nsImage: icon).resizable().interpolation(.high).frame(width: 17, height: 17)
-            } else if alert.agent == nil {
-                Image(systemName: "sun.horizon.fill").font(.system(size: 12)).foregroundStyle(.orange)
+            } else if let symbol = notice.symbol {
+                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(notice.level == .info ? Color.orange : notice.color)
             }
-            Text(alert.name).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
+            Text(notice.name).font(.system(size: 12.5, weight: .semibold)).lineLimit(1).layoutPriority(1)
             Text("·").foregroundStyle(.secondary)
-            if !alert.window.isEmpty {
-                Text(alert.window).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
+            if !notice.window.isEmpty {
+                Text(notice.window).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
                 Text("·").foregroundStyle(.secondary)
             }
-            Text(alert.text).font(.system(size: 12.5, weight: .bold)).foregroundStyle(color)
+            Text(notice.text).font(.system(size: 12.5, weight: .bold)).foregroundStyle(notice.color)
+                .lineLimit(1).truncationMode(.middle)
         }
         .font(.system(size: 12.5))
         .padding(.horizontal, 14)
         .frame(height: 30)
     }
+}
 
-    private var color: Color {
-        switch alert.level {
-        case .low: .orange
-        case .critical: .errorText
-        case .reset: .green
-        case .info: .primary
+/// "● Recording 0:42 [■]" while the screen is being recorded.
+private struct RecordingIsland: View {
+    let since: Date
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(.red).frame(width: 8, height: 8)
+            Text("Recording").font(.system(size: 12.5, weight: .semibold))
+            // Ticks once a second on its own; no timers of ours.
+            Text(since, style: .timer)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+            Button {
+                CaptureController.shared.perform(.record)
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 20, height: 20)
+                    .background(Color.red.gradient, in: .circle)
+            }
+            .buttonStyle(.plain)
+            .help("Stop recording")
         }
+        .padding(.leading, 14)
+        .padding(.trailing, 5)
+        .frame(height: 30)
     }
 }
 

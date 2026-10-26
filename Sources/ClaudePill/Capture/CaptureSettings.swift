@@ -1,12 +1,11 @@
 import AVFoundation
 import Combine
-import ServiceManagement
 import SwiftUI
 
-struct SettingsView: View {
-    static let windowID = "settings"
+struct CaptureSettingsView: View {
+    static let windowID = "capture-settings"
 
-    @Environment(AppController.self) private var app
+    @Environment(CaptureController.self) private var app
 
     var body: some View {
         ScrollView {
@@ -28,9 +27,9 @@ struct SettingsView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            AppGlyph(size: 52)
+            CaptureGlyph(size: 52)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Snappabl")
+                Text("Capture")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                 Text("Screenshots and recordings, one shortcut away.")
                     .font(.system(size: 12))
@@ -45,7 +44,7 @@ struct SettingsView: View {
 // MARK: - Sections
 
 private struct ShortcutsSection: View {
-    @Environment(AppController.self) private var app
+    @Environment(CaptureController.self) private var app
 
     var body: some View {
         GlassSection(title: "Shortcuts", symbol: "command") {
@@ -68,7 +67,7 @@ private struct ShortcutsSection: View {
 }
 
 private struct SavingSection: View {
-    @Bindable var prefs: Preferences
+    @Bindable var prefs: CapturePreferences
 
     var body: some View {
         GlassSection(title: "Screenshots", symbol: "photo.on.rectangle") {
@@ -83,7 +82,7 @@ private struct SavingSection: View {
                     .buttonStyle(.glass)
             }
             ToggleRow("Play capture sound", symbol: "speaker.wave.2", isOn: $prefs.playSound)
-            ToggleRow("Show preview after capture", symbol: "rectangle.on.rectangle", isOn: $prefs.showPreview)
+            ToggleRow("Show captures in the island", symbol: "capsule", isOn: $prefs.showPreview)
             ToggleRow("Include cursor", symbol: "cursorarrow", isOn: $prefs.screenshotShowsCursor)
         }
     }
@@ -104,7 +103,7 @@ private struct SavingSection: View {
 }
 
 private struct RecordingSection: View {
-    @Bindable var prefs: Preferences
+    @Bindable var prefs: CapturePreferences
 
     var body: some View {
         GlassSection(title: "Recording", symbol: "record.circle") {
@@ -150,23 +149,12 @@ private struct RecordingSection: View {
 }
 
 private struct GeneralSection: View {
-    @Environment(AppController.self) private var app
+    @Environment(CaptureController.self) private var app
     @State private var screenAccess = CGPreflightScreenCaptureAccess()
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
-        GlassSection(title: "General", symbol: "gearshape") {
-            ToggleRow("Launch at login", symbol: "power", isOn: Binding(
-                get: { launchAtLogin },
-                set: { enabled in
-                    do {
-                        if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-                    } catch {
-                        NSSound.beep()
-                    }
-                    launchAtLogin = SMAppService.mainApp.status == .enabled
-                }
-            ))
+        // Open at Login lives in the menu, with the rest of Claude Pill's options.
+        GlassSection(title: "Permissions", symbol: "lock.shield") {
             SettingRow("Screen Recording", symbol: screenAccess ? "checkmark.shield" : "lock.shield") {
                 if screenAccess {
                     Text("Allowed")
@@ -284,4 +272,19 @@ private struct Backdrop: View {
 
 private extension URL {
     var abbreviatedPath: String { (path as NSString).abbreviatingWithTildeInPath }
+}
+
+struct CaptureGlyph: View {
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: "camera.viewfinder")
+            .font(.system(size: size * 0.52, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(colors: [.cyan, .blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: .rect(cornerRadius: size * 0.28)
+            )
+    }
 }

@@ -9,8 +9,8 @@ enum VideoCodec: String, CaseIterable, Identifiable {
 
 @MainActor
 @Observable
-final class Preferences {
-    static let shared = Preferences()
+final class CapturePreferences {
+    static let shared = CapturePreferences()
 
     var saveFolder: URL { didSet { defaults.set(saveFolder.path, forKey: Keys.saveFolder) } }
     /// A missing entry means the user cleared that shortcut.
@@ -27,24 +27,27 @@ final class Preferences {
     private let defaults = UserDefaults.standard
 
     private enum Keys {
-        static let saveFolder = "saveFolder"
-        static let shortcuts = "shortcuts"
-        static let playSound = "playSound"
-        static let showPreview = "showPreview"
-        static let screenshotCursor = "screenshotShowsCursor"
-        static let recordingCursor = "recordingShowsCursor"
-        static let systemAudio = "recordSystemAudio"
-        static let microphone = "recordMicrophone"
-        static let frameRate = "frameRate"
-        static let codec = "codec"
+        static let saveFolder = "capture.saveFolder"
+        static let shortcuts = "capture.shortcuts"
+        static let playSound = "capture.playSound"
+        static let showPreview = "capture.showPreview"
+        static let screenshotCursor = "capture.screenshotShowsCursor"
+        static let recordingCursor = "capture.recordingShowsCursor"
+        static let systemAudio = "capture.recordSystemAudio"
+        static let microphone = "capture.recordMicrophone"
+        static let frameRate = "capture.frameRate"
+        static let codec = "capture.codec"
+        static let all = [saveFolder, shortcuts, playSound, showPreview, screenshotCursor, recordingCursor,
+                          systemAudio, microphone, frameRate, codec]
     }
 
     static let defaultFolder: URL = FileManager.default
         .urls(for: .picturesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Snappabl", isDirectory: true)
+        .appendingPathComponent("Claude Pill", isDirectory: true)
 
     private init() {
         let d = UserDefaults.standard
+        Self.importSnappablSettings(d)
         saveFolder = d.string(forKey: Keys.saveFolder).map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultFolder
         shortcuts = Self.loadShortcuts(d) ?? CaptureAction.defaultShortcuts
         playSound = d.object(forKey: Keys.playSound) as? Bool ?? true
@@ -56,6 +59,19 @@ final class Preferences {
         let fps = d.integer(forKey: Keys.frameRate)
         frameRate = [30, 60].contains(fps) ? fps : 60
         codec = d.string(forKey: Keys.codec).flatMap(VideoCodec.init(rawValue:)) ?? .hevc
+    }
+
+    /// Capture used to be a separate app, Snappabl. Its settings come along once, so shortcuts
+    /// and the save folder stay what they were.
+    private static func importSnappablSettings(_ d: UserDefaults) {
+        let done = "capture.importedSnappabl"
+        guard !d.bool(forKey: done) else { return }
+        d.set(true, forKey: done)
+        guard let old = UserDefaults(suiteName: "app.snappabl.Snappabl") else { return }
+        for key in Keys.all where d.object(forKey: key) == nil {
+            let oldKey = String(key.dropFirst("capture.".count))
+            if let value = old.object(forKey: oldKey) { d.set(value, forKey: key) }
+        }
     }
 
     private static func loadShortcuts(_ d: UserDefaults) -> [CaptureAction: Shortcut]? {

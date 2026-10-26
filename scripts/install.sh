@@ -11,6 +11,13 @@ cd "$(dirname "$0")/.."
 
 pkill -x ClaudePill 2>/dev/null || true
 rm -rf "/Applications/Claude Pill.app"
+# Screenshots and recordings used to be a separate app, Snappabl. Running both would fight over
+# the same shortcuts, so the old one goes; its settings are carried over on first launch.
+if [ -d "/Applications/Snappabl.app" ]; then
+  pkill -x Snappabl 2>/dev/null || true
+  rm -rf "/Applications/Snappabl.app"
+  echo "Removed Snappabl.app: capture is part of Claude Pill now."
+fi
 cp -R "build/Claude Pill.app" /Applications/
 
 mkdir -p "$HOME/.claude/pill/sessions"

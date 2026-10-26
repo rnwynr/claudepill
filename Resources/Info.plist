@@ -26,5 +26,11 @@
 	<string>Claude Pill listens to Spotify or Music so the cover art can bounce along with the beat. Nothing is recorded or saved.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Claude Pill records your microphone only when you turn on “Microphone” for screen recordings.</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
 </dict>
 </plist>

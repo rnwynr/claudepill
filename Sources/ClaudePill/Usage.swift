@@ -11,20 +11,6 @@ struct UsageWindow: Equatable {
     var emptyAt: Date?
 }
 
-/// A limit warning or reset, shown for a few seconds in the island above the pills.
-struct UsageAlert: Identifiable, Equatable {
-    enum Level { case low, critical, reset, info }
-    let id = UUID()
-    /// Whose logo to show; none for notices about both, like the daily recap.
-    let agent: Agent?
-    /// "Claude", or "Codex · <account>".
-    let name: String
-    /// "5h" or "Weekly".
-    let window: String
-    let text: String
-    let level: Level
-}
-
 /// The 5-hour and weekly limits of one account.
 struct UsageReport: Equatable {
     var fiveHour: UsageWindow?
@@ -69,9 +55,6 @@ final class UsageStore: ObservableObject {
         }
     }
 
-    /// Limit warnings waiting to be shown in the island above the pills, oldest first.
-    @Published private(set) var alerts: [UsageAlert] = []
-    private var alertTimer: Task<Void, Never>?
     @Published private(set) var codexLiveEmail: String?
     @Published private(set) var liveAccountId: String?
     @Published private(set) var refreshing = false
@@ -81,7 +64,11 @@ final class UsageStore: ObservableObject {
     @Published var lastError: String? {
         didSet {
             errorClear?.cancel()
-            guard lastError != nil else { return }
+            guard let lastError else { return }
+            // The panel shows it when open; otherwise the island does, so it isn't missed.
+            if !PanelController.shared.usageOpen {
+                push(IslandNotice(agent: .codex, name: "Codex accounts", text: lastError, level: .critical))
+            }
             errorClear = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(60))
                 if !Task.isCancelled { UsageStore.shared.lastError = nil }
@@ -96,9 +83,9 @@ final class UsageStore: ObservableObject {
     func start() {
         // Development aid: `defaults write local.boywithalo.claudepill pill.demoAlerts -bool true`.
         if UserDefaults.standard.bool(forKey: "pill.demoAlerts") {
-            push(UsageAlert(agent: .codex, name: "Codex · work", window: "5hr", text: "12% left", level: .low))
-            push(UsageAlert(agent: .claude, name: "Claude", window: "Weekly", text: "4% left", level: .critical))
-            push(UsageAlert(agent: .codex, name: "Codex · rahikm", window: "5hr", text: "limit reset", level: .reset))
+            push(IslandNotice(agent: .codex, name: "Codex · work", window: "5hr", text: "12% left", level: .low))
+            push(IslandNotice(agent: .claude, name: "Claude", window: "Weekly", text: "4% left", level: .critical))
+            push(IslandNotice(agent: .codex, name: "Codex · rahikm", window: "5hr", text: "limit reset", level: .reset))
         }
         refresh()
         // The status line can update Claude's numbers at any time, and reading them is cheap.
@@ -262,7 +249,7 @@ final class UsageStore: ObservableObject {
               UserDefaults.standard.string(forKey: "stats.recapShown") != today,
               stats.today.turns > 0 else { return }
         UserDefaults.standard.set(today, forKey: "stats.recapShown")
-        push(UsageAlert(agent: nil, name: "Today", window: "", text: stats.summary, level: .info))
+        push(IslandNotice(symbol: "sun.horizon.fill", name: "Today", text: stats.summary, level: .info))
     }
 
     // MARK: Pace
@@ -335,7 +322,7 @@ final class UsageStore: ObservableObject {
         // A new window: the reset time jumped ahead (or the old one has passed).
         if let lastReset = seen["reset"], lastReset > 0, reset > lastReset + 60 || (reset == 0 && lastReset < Date().timeIntervalSince1970) {
             if let lastLeft = seen["left"], lastLeft < 100, left > lastLeft {
-                push(UsageAlert(agent: agent, name: name, window: window, text: "limit reset", level: .reset))
+                push(IslandNotice(agent: agent, name: name, window: window, text: "limit reset", level: .reset))
             }
             seen["level"] = nil
             seen["pace"] = nil
@@ -344,14 +331,14 @@ final class UsageStore: ObservableObject {
         let level: Double? = left <= 0 ? 0 : left <= 5 ? 5 : left <= 15 ? 15 : nil
         if let level, level < (seen["level"] ?? 101) {
             let text = level == 0 ? "limit reached" : "\(Int(left.rounded(.down)))% left"
-            push(UsageAlert(agent: agent, name: name, window: window, text: text, level: level == 15 ? .low : .critical))
+            push(IslandNotice(agent: agent, name: name, window: window, text: text, level: level == 15 ? .low : .critical))
             seen["level"] = level
         }
         if level == nil { seen["level"] = nil }
         // Heading for empty within the hour, before the window resets: say so once.
         if let empty = w.emptyAt, level == nil, seen["pace"] == nil, empty.timeIntervalSinceNow < 3600 {
-            push(UsageAlert(agent: agent, name: name, window: window,
-                            text: "runs out in ~\(Self.duration(empty.timeIntervalSinceNow))", level: .low))
+            push(IslandNotice(agent: agent, name: name, window: window,
+                              text: "runs out in ~\(Self.duration(empty.timeIntervalSinceNow))", level: .low))
             seen["pace"] = 1
         }
         seen["reset"] = reset
@@ -370,25 +357,8 @@ final class UsageStore: ObservableObject {
         return parts.joined(separator: " ")
     }
 
-    private func push(_ alert: UsageAlert) {
-        alerts.append(alert)
-        if alerts.count == 1 { scheduleAlertDismissal() }
-    }
-
-    /// Clears the alert on show; the next one, if any, takes its place.
-    func dismissAlert() {
-        guard !alerts.isEmpty else { return }
-        alerts.removeFirst()
-        scheduleAlertDismissal()
-    }
-
-    private func scheduleAlertDismissal() {
-        alertTimer?.cancel()
-        guard !alerts.isEmpty else { return }
-        alertTimer = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(12))
-            if !Task.isCancelled { UsageStore.shared.dismissAlert() }
-        }
+    private func push(_ notice: IslandNotice) {
+        Island.shared.post(notice)
     }
 
     private func refresh(force: Bool) {

@@ -10,12 +10,13 @@ struct HUDMessage {
     var onClick: (() -> Void)?
 }
 
-/// Small glass toast in the bottom-right corner after a capture. Click it to act (e.g. reveal the file).
+/// Small glass toast in the bottom-right corner, used for island notices while the floating
+/// pill is switched off. Click it to act (e.g. reveal the file).
 @MainActor
 final class HUD {
     static let shared = HUD()
 
-    private var panel: FloatingPanel?
+    private var panel: CapturePanel?
     private var hideTask: Task<Void, Never>?
 
     func show(_ message: HUDMessage, duration: Duration = .seconds(2.6)) {
@@ -26,7 +27,7 @@ final class HUD {
             message.onClick?()
             self?.hide()
         }
-        let (panel, host) = FloatingPanel.hosting(view)
+        let (panel, host) = CapturePanel.hosting(view)
         let size = host.fittingSize
         let visible = (NSScreen.underMouse ?? NSScreen.screens[0]).visibleFrame
         panel.setFrame(CGRect(x: visible.maxX - size.width, y: visible.minY, width: size.width, height: size.height),
@@ -104,12 +105,13 @@ private struct HUDView: View {
 }
 
 /// Floating glass timer + stop button while recording, plus a dashed outline around a region recording.
-/// Both are Snappabl windows, so the capture filter keeps them out of the video.
+/// Both are the app's own windows, so the capture filter keeps them out of the video.
+/// The timer pill is left out when the island above the pills shows the recording instead.
 @MainActor
 final class RecordingChrome {
-    private var panels: [FloatingPanel] = []
+    private var panels: [CapturePanel] = []
 
-    init(selection: CaptureSelection, startedAt: Date, onStop: @escaping () -> Void) {
+    init(selection: CaptureSelection, startedAt: Date, showsPill: Bool, onStop: @escaping () -> Void) {
         let region = selection.globalRect
         let visible = NSScreen.screens.first { $0.displayID == selection.displayID }?.visibleFrame ?? selection.screenFrame
 
@@ -117,7 +119,7 @@ final class RecordingChrome {
         let isRegion = selection.rect != nil && selection.windowID == nil
         if isRegion {
             let outlineFrame = region.insetBy(dx: -3, dy: -3)
-            let outline = FloatingPanel(size: outlineFrame.size)
+            let outline = CapturePanel(size: outlineFrame.size)
             outline.ignoresMouseEvents = true
             outline.contentView = NSHostingView(rootView:
                 Rectangle().strokeBorder(Color.red.opacity(0.9), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
@@ -127,7 +129,8 @@ final class RecordingChrome {
             panels.append(outline)
         }
 
-        let (pill, host) = FloatingPanel.hosting(RecordingPill(startedAt: startedAt, onStop: onStop))
+        guard showsPill else { return }
+        let (pill, host) = CapturePanel.hosting(RecordingPill(startedAt: startedAt, onStop: onStop))
         let size = host.fittingSize
         pill.setFrame(CGRect(origin: Self.pillOrigin(size: size, region: region, visible: visible,
                                                      fullScreen: !isRegion), size: size),

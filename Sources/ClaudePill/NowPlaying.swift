@@ -232,7 +232,15 @@ final class NowPlayingStore: ObservableObject {
 
         // A new song (not the first one seen at launch) gets a moment in the spotlight.
         let key = next.map { "\($0.player.rawValue):\($0.title)|\($0.artist)" }
-        if let key, let old = songKey, key != old, !collapsed { announce() }
+        if let key, let old = songKey, key != old {
+            if !collapsed { announce() }
+            // The player is tucked into the disc next to the handle: say it in the island instead.
+            else if let next, PanelController.shared.isShown {
+                let text = next.artist.isEmpty ? next.title : "\(next.title) — \(next.artist)"
+                Island.shared.post(IslandNotice(symbol: "music.note", name: "Now playing", text: text,
+                                                level: .info, seconds: 4))
+            }
+        }
         if key != nil { songKey = key }
     }
 
